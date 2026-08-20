@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useMusicStore } from '../store/musicStore';
-import { colors, spacing, borderRadius, typography } from '../theme/colors';
+import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
 import { play, pause } from '../services/MusicService';
 
 interface MiniPlayerProps {
@@ -17,14 +17,14 @@ interface MiniPlayerProps {
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress }) => {
-  const { currentSong, isPlaying, position, duration } = useMusicStore();
+  const { currentSong, isPlaying, position, duration, setIsPlaying } = useMusicStore();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   if (!currentSong) {
     return null;
   }
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.95,
@@ -39,9 +39,11 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress }) => {
     ]).start();
 
     if (isPlaying) {
-      pause();
+      await pause();
+      setIsPlaying(false);
     } else {
-      play();
+      await play();
+      setIsPlaying(true);
     }
   };
 
@@ -85,10 +87,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress }) => {
             style={styles.playButton}
             onPress={handlePlayPause}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Icon 
-              name={isPlaying ? "pause" : "play"} 
-              size={20} 
-              color={colors.text.primary} 
+            <Icon
+              name={isPlaying ? "pause" : "play"}
+              size={20}
+              color={colors.text.inverse}
             />
           </TouchableOpacity>
         </Animated.View>
@@ -99,12 +101,13 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceGlass,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
+    ...elevation.floating,
   },
   progressBar: {
-    height: 2,
+    height: 2.5,
     backgroundColor: colors.surfaceLight,
   },
   progressFill: {
@@ -120,6 +123,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     marginRight: spacing.md,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
   },
   artworkImage: {
     width: '100%',
@@ -154,6 +159,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.accent,
+    ...elevation.glow,
   },
 });

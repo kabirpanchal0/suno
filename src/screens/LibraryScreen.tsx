@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { useMusicStore } from '../store/musicStore';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useMusicStore, Playlist } from '../store/musicStore';
 import { SongContextMenu } from '../components/SongContextMenu';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
-import { colors, spacing, borderRadius, typography } from '../theme/colors';
+import { PlaylistDetailScreen } from './PlaylistDetailScreen';
+import { SearchBar } from '../components/SearchBar';
+import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
 import { playQueue, addToQueue as addTrackToQueue } from '../services/MusicService';
 
 type ViewMode = 'albums' | 'artists' | 'playlists';
@@ -35,6 +38,8 @@ export const LibraryScreen: React.FC = () => {
   const [contextMenuSong, setContextMenuSong] = useState<any>(null);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [pendingSong, setPendingSong] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
 
   const albumsList = useMemo(() => {
     return Array.from(albums.entries()).map(([name, songs]) => ({
@@ -54,6 +59,26 @@ export const LibraryScreen: React.FC = () => {
     }));
   }, [artists]);
 
+  const filteredPlaylists = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return playlists;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return playlists.filter((playlist) => {
+      // Search by playlist name
+      if (playlist.name.toLowerCase().includes(query)) {
+        return true;
+      }
+
+      // Search by songs in the playlist
+      return playlist.songs?.some((song) =>
+        song.title?.toLowerCase().includes(query) ||
+        song.artist?.toLowerCase().includes(query)
+      );
+    });
+  }, [playlists, searchQuery]);
+
   const handleAlbumPress = async (albumSongs: any[]) => {
     if (albumSongs.length > 0) {
       setCurrentSong(albumSongs[0]);
@@ -63,13 +88,12 @@ export const LibraryScreen: React.FC = () => {
     }
   };
 
-  const handlePlaylistPress = async (playlist: any) => {
-    if (playlist.songs && playlist.songs.length > 0) {
-      setCurrentSong(playlist.songs[0]);
-      setQueue(playlist.songs.slice(1));
-      setIsPlaying(true);
-      await playQueue(playlist.songs);
-    }
+  const handlePlaylistPress = (playlist: Playlist) => {
+    setSelectedPlaylist(playlist);
+  };
+
+  const handleBackFromPlaylist = () => {
+    setSelectedPlaylist(null);
   };
 
   const handleCloseContextMenu = () => {
@@ -105,6 +129,11 @@ export const LibraryScreen: React.FC = () => {
       addToPlaylist(playlist.id, pendingSong);
       setPendingSong(null);
     }
+  };
+
+  const handleCreatePlaylistButton = () => {
+    setPendingSong(null);
+    setShowCreatePlaylist(true);
   };
 
   const isSongFavorite = (song: any): boolean => {
@@ -163,6 +192,7 @@ export const LibraryScreen: React.FC = () => {
     if (viewMode === 'albums') {
       return (
         <FlatList
+          key="albums-grid"
           data={albumsList}
           renderItem={renderAlbum}
           keyExtractor={(item) => item.id}
@@ -183,6 +213,7 @@ export const LibraryScreen: React.FC = () => {
     if (viewMode === 'artists') {
       return (
         <FlatList
+          key="artists-grid"
           data={artistsList}
           renderItem={renderAlbum}
           keyExtractor={(item) => item.id}
@@ -201,47 +232,85 @@ export const LibraryScreen: React.FC = () => {
     }
 
     return (
-      <FlatList
-        data={playlists}
-        renderItem={renderPlaylist}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>♪</Text>
-            <Text style={styles.emptyText}>No playlists yet</Text>
-            <Text style={styles.emptySubtext}>
-              Create your first playlist from a song
-            </Text>
-          </View>
-        }
-      />
+      <View style={styles.playlistsContainer}>
+        <View style={styles.playlistsHeader}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search playlists..."
+          />
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={handleCreatePlaylistButton}
+            activeOpacity={0.8}>
+            <Icon name="plus-circle" size={26} color={colors.text.inverse} />
+            <Text style={styles.createButtonText}>New Playlist</Text>
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          key="playlists-list"
+          data={filteredPlaylists}
+          renderItem={renderPlaylist}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>♪</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'No playlists found' : 'No playlists yet'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {searchQuery
+                  ? 'Try a different search term'
+                  : 'Tap "Create Playlist" to get started'}
+              </Text>
+            </View>
+          }
+        />
+      </View>
     );
   };
 
+  // Show playlist detail screen if a playlist is selected
+  if (selectedPlaylist) {
+    return (
+      <PlaylistDetailScreen
+        playlist={selectedPlaylist}
+        onBack={handleBackFromPlaylist}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Library</Text>
-        <View style={styles.tabs}>
-          <TabButton
-            label="Albums"
-            active={viewMode === 'albums'}
-            onPress={() => setViewMode('albums')}
-          />
-          <TabButton
-            label="Artists"
-            active={viewMode === 'artists'}
-            onPress={() => setViewMode('artists')}
-          />
-          <TabButton
-            label="Playlists"
-            active={viewMode === 'playlists'}
-            onPress={() => setViewMode('playlists')}
-          />
+      <View style={styles.ambientGlowWarm} pointerEvents="none" />
+      {/* Sticky Header */}
+      <View style={styles.headerContainer}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Browse</Text>
+          <Text style={styles.title}>Library</Text>
+          <View style={styles.tabs}>
+            <TabButton
+              label="Albums"
+              active={viewMode === 'albums'}
+              onPress={() => setViewMode('albums')}
+            />
+            <TabButton
+              label="Artists"
+              active={viewMode === 'artists'}
+              onPress={() => setViewMode('artists')}
+            />
+            <TabButton
+              label="Playlists"
+              active={viewMode === 'playlists'}
+              onPress={() => setViewMode('playlists')}
+            />
+          </View>
         </View>
       </View>
+
+      {/* Scrollable Content */}
       {renderContent()}
 
       <SongContextMenu
@@ -290,14 +359,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  ambientGlowWarm: {
+    position: 'absolute',
+    top: -100,
+    right: -120,
+    width: 300,
+    height: 300,
+    borderRadius: 999,
+    backgroundColor: colors.glowCool,
+  },
+  headerContainer: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   header: {
     padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
+    marginTop: 20
+  },
+  eyebrow: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.semibold,
+    color: colors.secondaryAccent,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wider,
+    marginBottom: spacing.xs,
   },
   title: {
     fontSize: typography.sizes.xxxl,
-    fontWeight: typography.weights.bold,
+    fontWeight: typography.weights.black,
+    letterSpacing: typography.letterSpacing.tight,
     color: colors.text.primary,
     marginBottom: spacing.lg,
   },
@@ -308,11 +402,14 @@ const styles = StyleSheet.create({
   tab: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: spacing.md,
+    borderRadius: borderRadius.full,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tabActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.secondaryAccentDim,
+    borderColor: colors.secondaryAccent,
   },
   tabText: {
     fontSize: typography.sizes.sm,
@@ -320,7 +417,8 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   tabTextActive: {
-    color: colors.accent,
+    color: colors.secondaryAccent,
+    fontWeight: typography.weights.semibold,
   },
   gridContent: {
     padding: spacing.md,
@@ -337,6 +435,8 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    ...elevation.card,
   },
   gridItemImage: {
     width: '100%',
@@ -350,6 +450,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   gridItemPlaceholderText: {
     fontSize: 48,
@@ -376,11 +478,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   listItemArtwork: {
     width: 60,
     height: 60,
     marginRight: spacing.md,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
   },
   listItemImage: {
     width: '100%',
@@ -434,5 +540,29 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  playlistsContainer: {
+    flex: 1,
+  },
+  playlistsHeader: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+    ...elevation.glow,
+  },
+  createButtonText: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.semibold,
+    color: colors.text.inverse,
   },
 });

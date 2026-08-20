@@ -12,7 +12,7 @@ import Slider from '@react-native-community/slider';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import TrackPlayer, { useProgress } from 'react-native-track-player';
 import { useMusicStore } from '../store/musicStore';
-import { colors, spacing, borderRadius, typography } from '../theme/colors';
+import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
 import {
   play,
   pause,
@@ -47,9 +47,9 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
     setIsPlaying,
   } = useMusicStore();
 
-  const { position, duration } = useProgress();
+  const { position, duration } = useProgress(250, 250); // Update every 250ms
   const [isSeeking, setIsSeeking] = useState(false);
-  const [seekPosition, setSeekPosition] = useState(0);
+  const [tempPosition, setTempPosition] = useState(0);
 
   const rotateAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -90,17 +90,23 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
     await skipToPrevious();
   };
 
-  const handleSeekStart = () => {
+  const handleSlidingStart = (value: number) => {
     setIsSeeking(true);
+    setTempPosition(value);
   };
 
-  const handleSeekChange = (value: number) => {
-    setSeekPosition(value);
+  const handleValueChange = (value: number) => {
+    if (isSeeking) {
+      setTempPosition(value);
+    }
   };
 
-  const handleSeekComplete = async (value: number) => {
-    await seekTo(value);
-    setIsSeeking(false);
+  const handleSlidingComplete = async (value: number) => {
+    try {
+      await seekTo(value);
+    } finally {
+      setIsSeeking(false);
+    }
   };
 
   const handleShuffle = () => {
@@ -123,11 +129,15 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
     ? favorites.some((s) => s.id === currentSong.id)
     : false;
 
-  const displayPosition = isSeeking ? seekPosition : position;
+  // Use temp position while seeking, otherwise use actual position
+  const currentPosition = isSeeking ? tempPosition : position;
+  const currentDuration = duration || 0;
 
   if (!currentSong) {
     return (
       <View style={styles.container}>
+        <View style={styles.ambientGlowWarm} pointerEvents="none" />
+        <View style={styles.ambientGlowCool} pointerEvents="none" />
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Icon name="chevron-down" size={28} color={colors.text.primary} />
@@ -143,6 +153,10 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
 
   return (
     <View style={styles.container}>
+      {/* Ambient gradient-mesh glow, echoing the artwork's mood */}
+      <View style={styles.ambientGlowWarm} pointerEvents="none" />
+      <View style={styles.ambientGlowCool} pointerEvents="none" />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -150,16 +164,17 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Now Playing</Text>
         <TouchableOpacity onPress={handleFavorite} style={styles.favoriteButton}>
-          <Icon 
-            name={isFavorite ? "heart" : "heart-outline"} 
-            size={26} 
-            color={isFavorite ? colors.accent : colors.text.tertiary} 
+          <Icon
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={26}
+            color={isFavorite ? colors.accent : colors.text.tertiary}
           />
         </TouchableOpacity>
       </View>
 
       {/* Artwork */}
       <View style={styles.artworkContainer}>
+        <View style={styles.artworkHalo} />
         <Animated.View style={[styles.artwork, { transform: [{ rotate: rotation }] }]}>
           {currentSong.artwork ? (
             <Image
@@ -171,6 +186,7 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
               <Icon name="music-note" size={100} color={colors.tertiary} />
             </View>
           )}
+          <View style={styles.artworkRim} pointerEvents="none" />
         </Animated.View>
       </View>
 
@@ -193,31 +209,33 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
       <View style={styles.progressContainer}>
         <Slider
           style={styles.slider}
-          value={displayPosition}
+          value={currentPosition}
           minimumValue={0}
-          maximumValue={duration || 1}
+          maximumValue={Math.max(currentDuration, 1)}
           minimumTrackTintColor={colors.accent}
           maximumTrackTintColor={colors.surfaceLight}
           thumbTintColor={colors.accent}
-          onSlidingStart={handleSeekStart}
-          onValueChange={handleSeekChange}
-          onSlidingComplete={handleSeekComplete}
+          onSlidingStart={handleSlidingStart}
+          onValueChange={handleValueChange}
+          onSlidingComplete={handleSlidingComplete}
+          step={0.1}
+          tapToSeek={true}
         />
         <View style={styles.timeContainer}>
-          <Text style={styles.time}>{formatTime(displayPosition)}</Text>
-          <Text style={styles.time}>{formatTime(duration)}</Text>
+          <Text style={styles.time}>{formatTime(currentPosition)}</Text>
+          <Text style={styles.time}>{formatTime(currentDuration)}</Text>
         </View>
       </View>
 
       {/* Controls */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
-          style={styles.secondaryControl}
+          style={[styles.secondaryControl, shuffle && styles.secondaryControlActive]}
           onPress={handleShuffle}>
-          <Icon 
-            name="shuffle" 
-            size={26} 
-            color={shuffle ? colors.accent : colors.text.primary} 
+          <Icon
+            name="shuffle"
+            size={22}
+            color={shuffle ? colors.accent : colors.text.tertiary}
           />
         </TouchableOpacity>
 
@@ -225,11 +243,11 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
           <Icon name="skip-previous" size={32} color={colors.text.primary} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
-          <Icon 
-            name={isPlaying ? "pause" : "play"} 
-            size={36} 
-            color={colors.background} 
+        <TouchableOpacity style={styles.playButton} onPress={handlePlayPause} activeOpacity={0.85}>
+          <Icon
+            name={isPlaying ? "pause" : "play"}
+            size={34}
+            color={colors.text.inverse}
           />
         </TouchableOpacity>
 
@@ -238,12 +256,12 @@ export const NowPlayingScreen: React.FC<{ onClose: () => void }> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.secondaryControl}
+          style={[styles.secondaryControl, repeat !== 'off' && styles.secondaryControlActive]}
           onPress={handleRepeat}>
-          <Icon 
-            name={repeat === 'track' ? 'repeat-once' : 'repeat'} 
-            size={26} 
-            color={repeat !== 'off' ? colors.accent : colors.text.primary} 
+          <Icon
+            name={repeat === 'track' ? 'repeat-once' : 'repeat'}
+            size={22}
+            color={repeat !== 'off' ? colors.accent : colors.text.tertiary}
           />
         </TouchableOpacity>
       </View>
@@ -264,6 +282,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  ambientGlowWarm: {
+    position: 'absolute',
+    top: -140,
+    left: -80,
+    width: 380,
+    height: 380,
+    borderRadius: 999,
+    backgroundColor: colors.glowWarm,
+  },
+  ambientGlowCool: {
+    position: 'absolute',
+    bottom: -160,
+    right: -100,
+    width: 360,
+    height: 360,
+    borderRadius: 999,
+    backgroundColor: colors.glowCool,
   },
   header: {
     flexDirection: 'row',
@@ -280,11 +317,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.medium,
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.semibold,
     color: colors.text.secondary,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: typography.letterSpacing.wider,
   },
   favoriteButton: {
     width: 40,
@@ -294,24 +331,50 @@ const styles = StyleSheet.create({
   },
   artworkContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     marginVertical: spacing.xl,
+  },
+  artworkHalo: {
+    position: 'absolute',
+    width: ARTWORK_SIZE + 60,
+    height: ARTWORK_SIZE + 60,
+    borderRadius: (ARTWORK_SIZE + 60) / 2,
+    backgroundColor: colors.accentGlow,
+    opacity: 0.35,
   },
   artwork: {
     width: ARTWORK_SIZE,
     height: ARTWORK_SIZE,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 16,
   },
   artworkImage: {
     width: '100%',
     height: '100%',
-    borderRadius: borderRadius.lg,
+    borderRadius: ARTWORK_SIZE / 2,
   },
   artworkPlaceholder: {
     width: '100%',
     height: '100%',
     backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.lg,
+    borderRadius: ARTWORK_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  artworkRim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: ARTWORK_SIZE / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   infoContainer: {
     paddingHorizontal: spacing.xl,
@@ -320,13 +383,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.sizes.xxl,
     fontWeight: typography.weights.bold,
+    letterSpacing: typography.letterSpacing.tight,
     color: colors.text.primary,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   artist: {
     fontSize: typography.sizes.lg,
-    color: colors.text.secondary,
+    color: colors.accentLight,
     marginBottom: spacing.xs,
     textAlign: 'center',
   },
@@ -350,6 +414,7 @@ const styles = StyleSheet.create({
   time: {
     fontSize: typography.sizes.sm,
     color: colors.text.tertiary,
+    fontWeight: typography.weights.medium,
   },
   controlsContainer: {
     flexDirection: 'row',
@@ -367,8 +432,12 @@ const styles = StyleSheet.create({
   secondaryControl: {
     width: 44,
     height: 44,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  secondaryControlActive: {
+    backgroundColor: colors.accentDim,
   },
   controlIcon: {
     fontSize: typography.sizes.xl,
@@ -378,12 +447,13 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   playButton: {
-    width: 70,
-    height: 70,
+    width: 74,
+    height: 74,
     borderRadius: borderRadius.full,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
+    ...elevation.glow,
   },
   queueInfo: {
     marginTop: spacing.xl,

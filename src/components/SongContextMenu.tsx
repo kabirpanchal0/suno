@@ -226,9 +226,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   menu: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
+    backgroundColor: colors.backgroundElevated,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderTopWidth: 1,
+    borderColor: colors.borderLight,
     maxHeight: height * 0.7,
   },
   songInfo: {
@@ -244,7 +246,7 @@ const styles = StyleSheet.create({
   },
   songArtist: {
     fontSize: typography.sizes.md,
-    color: colors.text.secondary,
+    color: colors.accentLight,
   },
   menuScroll: {
     maxHeight: height * 0.5,
@@ -254,6 +256,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
     paddingVertical: spacing.md,
+    marginHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   menuIcon: {
     marginRight: spacing.md,
@@ -289,11 +293,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.medium,
     color: colors.accent,
     marginLeft: spacing.xs,
-  },
-  chevron: {
-    fontSize: typography.sizes.xl,
-    color: colors.text.tertiary,
-    marginLeft: spacing.sm,
   },
   separator: {
     height: 1,

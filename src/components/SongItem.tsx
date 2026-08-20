@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Song } from '../store/musicStore';
-import { colors, spacing, borderRadius, typography } from '../theme/colors';
+import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
 
 interface SongItemProps {
   song: Song;
@@ -47,7 +47,7 @@ export const SongItem: React.FC<SongItemProps> = ({
         )}
         {isPlaying && (
           <View style={styles.playingIndicator}>
-            <Icon name="equalizer" size={16} color={colors.background} />
+            <Icon name="equalizer" size={14} color={colors.text.inverse} />
           </View>
         )}
       </View>
@@ -75,16 +75,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
+    marginHorizontal: spacing.sm,
+    marginBottom: 2,
+    borderRadius: borderRadius.md,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   containerActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.accentDim,
+    borderColor: colors.borderGlow,
   },
   artwork: {
     width: 52,
     height: 52,
     marginRight: spacing.md,
     position: 'relative',
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
   },
   artworkImage: {
     width: '100%',
@@ -101,12 +109,13 @@ const styles = StyleSheet.create({
   },
   playingIndicator: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
+    bottom: 4,
+    right: 4,
     backgroundColor: colors.accent,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    ...elevation.glow,
   },
   info: {
     flex: 1,
@@ -119,7 +128,8 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   titleActive: {
-    color: colors.accent,
+    color: colors.accentLight,
+    fontWeight: typography.weights.semibold,
   },
   artist: {
     fontSize: typography.sizes.sm,
@@ -129,5 +139,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     color: colors.text.tertiary,
     marginLeft: spacing.sm,
+    fontWeight: typography.weights.medium,
   },
 });

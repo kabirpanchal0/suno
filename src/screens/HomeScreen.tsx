@@ -12,7 +12,7 @@ import { SearchBar } from '../components/SearchBar';
 import { SongItem } from '../components/SongItem';
 import { SongContextMenu } from '../components/SongContextMenu';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
-import { colors, spacing, typography } from '../theme/colors';
+import { colors, spacing, typography, borderRadius, elevation } from '../theme/colors';
 import { scanMusicLibrary, searchSongs } from '../services/FileService';
 import { playTrack, addToQueue as addTrackToQueue } from '../services/MusicService';
 
@@ -127,32 +127,6 @@ export const HomeScreen: React.FC = () => {
       isPlaying={currentSong?.id === item.id}
     />
   );
-
-  const renderHeader = () => (
-    <View style={styles.tabsContainer}>
-      <View style={styles.tabs}>
-        <TabButton
-          label="All Songs"
-          active={activeTab === 'all'}
-          onPress={() => setActiveTab('all')}
-          count={songs.length}
-        />
-        <TabButton
-          label="Recent"
-          active={activeTab === 'recent'}
-          onPress={() => setActiveTab('recent')}
-          count={recentlyPlayed.length}
-        />
-        <TabButton
-          label="Favorites"
-          active={activeTab === 'favorites'}
-          onPress={() => setActiveTab('favorites')}
-          count={favorites.length}
-        />
-      </View>
-    </View>
-  );
-
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       {isLoading ? (
@@ -186,19 +160,51 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Music</Text>
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search your library..."
-        />
+      {/* Ambient glow accents */}
+      <View style={styles.ambientGlowWarm} pointerEvents="none" />
+      <View style={styles.ambientGlowCool} pointerEvents="none" />
+
+      {/* Sticky Header */}
+      <View style={styles.headerContainer}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Your Sound</Text>
+          <Text style={styles.title}>Music</Text>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search your library..."
+          />
+        </View>
+        {/* Sticky Tabs */}
+        <View style={styles.tabsContainer}>
+          <View style={styles.tabs}>
+            <TabButton
+              label="All Songs"
+              active={activeTab === 'all'}
+              onPress={() => setActiveTab('all')}
+              count={songs.length}
+            />
+            <TabButton
+              label="Recent"
+              active={activeTab === 'recent'}
+              onPress={() => setActiveTab('recent')}
+              count={recentlyPlayed.length}
+            />
+            <TabButton
+              label="Favorites"
+              active={activeTab === 'favorites'}
+              onPress={() => setActiveTab('favorites')}
+              count={favorites.length}
+            />
+          </View>
+        </View>
       </View>
+
+      {/* Scrollable Song List */}
       <FlatList
         data={filteredSongs}
         renderItem={renderSong}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -255,38 +261,75 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  ambientGlowWarm: {
+    position: 'absolute',
+    top: -120,
+    right: -100,
+    width: 320,
+    height: 320,
+    borderRadius: 999,
+    backgroundColor: colors.glowWarm,
+  },
+  ambientGlowCool: {
+    position: 'absolute',
+    top: 180,
+    left: -140,
+    width: 280,
+    height: 280,
+    borderRadius: 999,
+    backgroundColor: colors.glowCool,
   },
   listContent: {
     flexGrow: 1,
+    paddingTop: spacing.sm,
+  },
+  headerContainer: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   header: {
     padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
+    marginTop: 20
+  },
+  eyebrow: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.semibold,
+    color: colors.accent,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wider,
+    marginBottom: spacing.xs,
   },
   title: {
     fontSize: typography.sizes.xxxl,
-    fontWeight: typography.weights.bold,
+    fontWeight: typography.weights.black,
+    letterSpacing: typography.letterSpacing.tight,
     color: colors.text.primary,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   tabsContainer: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   tabs: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.lg,
   },
   tab: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: spacing.md,
+    borderRadius: borderRadius.full,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tabActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.accentDim,
+    borderColor: colors.borderGlow,
   },
   tabText: {
     fontSize: typography.sizes.sm,
@@ -294,7 +337,8 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   tabTextActive: {
-    color: colors.accent,
+    color: colors.accentLight,
+    fontWeight: typography.weights.semibold,
   },
   emptyContainer: {
     flex: 1,
@@ -319,11 +363,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     backgroundColor: colors.surfaceLight,
-    borderRadius: spacing.md,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...elevation.card,
   },
   refreshButtonText: {
     fontSize: typography.sizes.md,
-    fontWeight: typography.weights.medium,
-    color: colors.accent,
+    fontWeight: typography.weights.semibold,
+    color: colors.accentLight,
   },
 });

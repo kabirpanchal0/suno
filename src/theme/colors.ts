@@ -1,35 +1,49 @@
 export const colors = {
-  // Calm, meditation-inspired palette
-  background: '#0A0A0B',
-  surface: '#141416',
-  surfaceLight: '#1C1C1F',
-  
-  primary: '#E8E8EA',
-  secondary: '#A8A8AC',
-  tertiary: '#6E6E73',
-  
-  accent: '#B8A583', // Warm, subtle accent
-  accentLight: '#D4C5A6',
-  
+  // Deep obsidian base with tonal depth — inspired by vinyl sleeves at night
+  background: '#0B0A10',
+  backgroundElevated: '#120F1A',
+  surface: '#171320',
+  surfaceLight: '#221C2E',
+  surfaceGlass: 'rgba(34, 28, 46, 0.55)',
+
+  primary: '#F3F1F6',
+  secondary: '#B4ACC2',
+  tertiary: '#6F6884',
+
+  // Warm amber lead accent + electric violet undertone for depth/glow
+  accent: '#F0B25E',
+  accentLight: '#FFD59A',
+  accentDim: 'rgba(240, 178, 94, 0.16)',
+  accentGlow: 'rgba(240, 178, 94, 0.35)',
+
+  secondaryAccent: '#8C6EFF',
+  secondaryAccentDim: 'rgba(140, 110, 255, 0.16)',
+  secondaryAccentGlow: 'rgba(140, 110, 255, 0.35)',
+
   text: {
-    primary: '#E8E8EA',
-    secondary: '#A8A8AC',
-    tertiary: '#6E6E73',
+    primary: '#F3F1F6',
+    secondary: '#B4ACC2',
+    tertiary: '#6F6884',
+    inverse: '#0B0A10',
   },
-  
-  border: '#2C2C2F',
-  borderLight: '#3A3A3D',
-  
-  success: '#7FAF7F',
-  warning: '#D9A566',
-  error: '#CC6666',
-  
-  overlay: 'rgba(10, 10, 11, 0.85)',
-  overlayLight: 'rgba(20, 20, 22, 0.75)',
-  
-  // Gradients for subtle depth
-  gradientStart: '#0A0A0B',
-  gradientEnd: '#141416',
+
+  border: '#2A2436',
+  borderLight: '#3A3248',
+  borderGlow: 'rgba(240, 178, 94, 0.4)',
+
+  success: '#8FCB9B',
+  warning: '#F0B25E',
+  error: '#E0788A',
+
+  overlay: 'rgba(6, 5, 10, 0.88)',
+  overlayLight: 'rgba(23, 19, 32, 0.7)',
+
+  // Ambient gradient mesh stops — deep violet-black to warm ember glow
+  gradientStart: '#0B0A10',
+  gradientMid: '#161221',
+  gradientEnd: '#1C1526',
+  glowWarm: 'rgba(240, 178, 94, 0.14)',
+  glowCool: 'rgba(140, 110, 255, 0.12)',
 };
 
 export const spacing = {
@@ -42,10 +56,10 @@ export const spacing = {
 };
 
 export const borderRadius = {
-  sm: 6,
-  md: 12,
-  lg: 18,
-  xl: 24,
+  sm: 8,
+  md: 14,
+  lg: 20,
+  xl: 28,
   full: 9999,
 };
 
@@ -57,12 +71,44 @@ export const typography = {
     lg: 18,
     xl: 24,
     xxl: 32,
-    xxxl: 40,
+    xxxl: 42,
   },
   weights: {
     regular: '400' as const,
     medium: '500' as const,
     semibold: '600' as const,
     bold: '700' as const,
+    black: '800' as const,
+  },
+  letterSpacing: {
+    tight: -0.5,
+    normal: 0,
+    wide: 0.5,
+    wider: 1.5,
+  },
+};
+
+// Shared elevation/glow presets for tactile depth
+export const elevation = {
+  card: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  floating: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    elevation: 12,
+  },
+  glow: {
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 10,
   },
 };

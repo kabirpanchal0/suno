@@ -75,7 +75,11 @@ export const skipToPrevious = async () => {
 };
 
 export const seekTo = async (position: number) => {
-  await TrackPlayer.seekTo(position);
+  try {
+    await TrackPlayer.seekTo(Math.max(0, position));
+  } catch (error) {
+    console.error('Error seeking:', error);
+  }
 };
 
 export const setRepeatMode = async (mode: 'off' | 'track' | 'queue') => {

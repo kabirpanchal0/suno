@@ -84,10 +84,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceGlass,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderWidth: 1,
     borderColor: colors.border,
   },
