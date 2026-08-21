@@ -8,6 +8,7 @@ import {
   Text,
   Modal,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { setupPlayer } from './src/services/MusicService';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -42,46 +43,50 @@ function App(): React.JSX.Element {
 
   if (!isPlayerReady) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-        <Icon name="music" size={80} color={colors.accent} />
-      </SafeAreaView>
+      <GestureHandlerRootView style={styles.container}>
+        <SafeAreaView style={styles.loadingContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+          <Icon name="music" size={80} color={colors.accent} />
+        </SafeAreaView>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-      
-      <View style={styles.content}>
-        {activeTab === 'home' ? <HomeScreen /> : <LibraryScreen />}
-      </View>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
-      <MiniPlayer onPress={handleMiniPlayerPress} />
+        <View style={styles.content}>
+          {activeTab === 'home' ? <HomeScreen /> : <LibraryScreen />}
+        </View>
 
-      <View style={styles.tabBar}>
-        <TabBarButton
-          label="Home"
-          iconName="home"
-          active={activeTab === 'home'}
-          onPress={() => setActiveTab('home')}
-        />
-        <TabBarButton
-          label="Library"
-          iconName="music-box-multiple"
-          active={activeTab === 'library'}
-          onPress={() => setActiveTab('library')}
-        />
-      </View>
+        <MiniPlayer onPress={handleMiniPlayerPress} />
 
-      <Modal
-        visible={showNowPlaying}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={handleCloseNowPlaying}>
-        <NowPlayingScreen onClose={handleCloseNowPlaying} />
-      </Modal>
-    </SafeAreaView>
+        <View style={styles.tabBar}>
+          <TabBarButton
+            label="Home"
+            iconName="home"
+            active={activeTab === 'home'}
+            onPress={() => setActiveTab('home')}
+          />
+          <TabBarButton
+            label="Library"
+            iconName="music-box-multiple"
+            active={activeTab === 'library'}
+            onPress={() => setActiveTab('library')}
+          />
+        </View>
+
+        <Modal
+          visible={showNowPlaying}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={handleCloseNowPlaying}>
+          <NowPlayingScreen onClose={handleCloseNowPlaying} />
+        </Modal>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 

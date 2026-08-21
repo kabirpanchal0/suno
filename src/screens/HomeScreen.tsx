@@ -6,7 +6,9 @@ import {
   Text,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useMusicStore } from '../store/musicStore';
 import { SearchBar } from '../components/SearchBar';
 import { SongItem } from '../components/SongItem';
@@ -15,11 +17,14 @@ import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
 import { colors, spacing, typography, borderRadius, elevation } from '../theme/colors';
 import { scanMusicLibrary, searchSongs } from '../services/FileService';
 import { playTrack, addToQueue as addTrackToQueue } from '../services/MusicService';
+import { loadLibrary, saveLibrary, mergeScannedSongs } from '../services/LibraryStorageService';
 
 export const HomeScreen: React.FC = () => {
   const {
     songs,
     setSongs,
+    setHasHydrated,
+    pruneMissingSongs,
     searchQuery,
     setSearchQuery,
     currentSong,
@@ -28,6 +33,7 @@ export const HomeScreen: React.FC = () => {
     playlists,
     setCurrentSong,
     setIsPlaying,
+    setQueue,
     playNext,
     addToQueue,
     toggleFavorite,
@@ -36,24 +42,89 @@ export const HomeScreen: React.FC = () => {
   } = useMusicStore();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isRescanning, setIsRescanning] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'favorites'>('all');
   const [contextMenuSong, setContextMenuSong] = useState<any>(null);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [pendingSong, setPendingSong] = useState<any>(null);
+  const [showTabMenu, setShowTabMenu] = useState(false);
 
+  const tabOptions: { key: 'all' | 'recent' | 'favorites'; label: string; count: number }[] = [
+    { key: 'all', label: 'All Songs', count: songs.length },
+    { key: 'recent', label: 'Recent', count: recentlyPlayed.length },
+    { key: 'favorites', label: 'Favorites', count: favorites.length },
+  ];
+  const activeTabOption = tabOptions.find((t) => t.key === activeTab)!;
+
+  // Runs once per mount. Loads whatever was persisted from a previous scan
+  // first; only touches the device filesystem if nothing has ever been
+  // persisted (first-ever launch, or the cache was cleared/invalidated).
+  // This is the fix for songs being re-fetched from the device on every
+  // reload/reopen — see LibraryStorageService for the persistence layer.
   useEffect(() => {
-    loadMusicLibrary();
+    let isMounted = true;
+
+    const hydrate = async () => {
+      setIsLoading(true);
+      try {
+        const persisted = await loadLibrary();
+        if (persisted && persisted.length > 0) {
+          if (isMounted) {
+            setSongs(persisted);
+          }
+        } else {
+          await performScan({ persist: true });
+        }
+      } catch (error) {
+        console.error('Error hydrating music library:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasHydrated(true);
+        }
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      isMounted = false;
+    };
+    // Intentionally run only on mount — this effect owns first-load hydration;
+    // rescans are triggered explicitly via handleRescanLibrary, not by this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadMusicLibrary = async () => {
-    setIsLoading(true);
+  // Scans the device and reconciles the result against whatever is
+  // currently in the store: new songs are added, songs no longer found
+  // on-device are dropped from the library (their references elsewhere —
+  // favorites/playlists/recently-played — are pruned too), and songs that
+  // still exist keep their identity, so nothing gets duplicated.
+  const performScan = async ({ persist }: { persist: boolean }) => {
+    const scannedSongs = await scanMusicLibrary();
+    const currentSongs = useMusicStore.getState().songs;
+    const merged = mergeScannedSongs(currentSongs, scannedSongs);
+
+    setSongs(merged);
+    pruneMissingSongs(new Set(merged.map((s) => s.id)));
+
+    if (persist) {
+      await saveLibrary(merged);
+    }
+    return merged;
+  };
+
+  // Explicit user-triggered rescan (pull-to-refresh / "Refresh Library"
+  // button / empty-state retry). This is the ONLY path that hits the device
+  // filesystem after first launch.
+  const handleRescanLibrary = async () => {
+    setIsRescanning(true);
     try {
-      const scannedSongs = await scanMusicLibrary();
-      setSongs(scannedSongs);
+      await performScan({ persist: true });
     } catch (error) {
-      console.error('Error loading music library:', error);
+      console.error('Error rescanning music library:', error);
     } finally {
-      setIsLoading(false);
+      setIsRescanning(false);
     }
   };
 
@@ -70,9 +141,14 @@ export const HomeScreen: React.FC = () => {
   }, [songs, recentlyPlayed, favorites, searchQuery, activeTab]);
 
   const handleSongPress = async (song: any, index: number) => {
+    const queue = filteredSongs.slice(index + 1);
     setCurrentSong(song);
     setIsPlaying(true);
-    const queue = filteredSongs.slice(index + 1);
+    // Without this, the store's `queue` stayed empty until the next track
+    // change resynced it (see playbackService's PlaybackActiveTrackChanged
+    // handler) — so Now Playing's "Up Next" list had nothing to show and
+    // looked broken/unscrollable right after playing a song from Home.
+    setQueue(queue);
     await playTrack(song, queue);
   };
 
@@ -125,11 +201,12 @@ export const HomeScreen: React.FC = () => {
       onPress={() => handleSongPress(item, index)}
       onLongPress={() => handleSongLongPress(item)}
       isPlaying={currentSong?.id === item.id}
+      onSwipeToQueue={handleAddToQueue}
     />
   );
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      {isLoading ? (
+      {isLoading || isRescanning ? (
         <>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.emptyText}>Scanning music library...</Text>
@@ -149,7 +226,7 @@ export const HomeScreen: React.FC = () => {
           {!searchQuery && activeTab === 'all' && (
             <TouchableOpacity
               style={styles.refreshButton}
-              onPress={loadMusicLibrary}>
+              onPress={handleRescanLibrary}>
               <Text style={styles.refreshButtonText}>Refresh Library</Text>
             </TouchableOpacity>
           )}
@@ -168,37 +245,71 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Your Sound</Text>
-          <Text style={styles.title}>Music</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Music</Text>
+            <View style={styles.titleRowActions}>
+              <TouchableOpacity
+                style={styles.rescanButton}
+                onPress={handleRescanLibrary}
+                disabled={isRescanning}
+                activeOpacity={0.7}>
+                <Icon
+                  name="refresh"
+                  size={18}
+                  color={isRescanning ? colors.text.tertiary : colors.accentLight}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tabMenuButton}
+                onPress={() => setShowTabMenu(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.tabMenuButtonText}>{activeTabOption.label}</Text>
+                <Icon name="chevron-down" size={18} color={colors.accentLight} />
+              </TouchableOpacity>
+            </View>
+          </View>
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search your library..."
           />
         </View>
-        {/* Sticky Tabs */}
-        <View style={styles.tabsContainer}>
-          <View style={styles.tabs}>
-            <TabButton
-              label="All Songs"
-              active={activeTab === 'all'}
-              onPress={() => setActiveTab('all')}
-              count={songs.length}
-            />
-            <TabButton
-              label="Recent"
-              active={activeTab === 'recent'}
-              onPress={() => setActiveTab('recent')}
-              count={recentlyPlayed.length}
-            />
-            <TabButton
-              label="Favorites"
-              active={activeTab === 'favorites'}
-              onPress={() => setActiveTab('favorites')}
-              count={favorites.length}
-            />
-          </View>
-        </View>
       </View>
+
+      <Modal
+        visible={showTabMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTabMenu(false)}>
+        <TouchableOpacity
+          style={styles.tabMenuBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowTabMenu(false)}>
+          <View style={styles.tabMenu}>
+            {tabOptions.map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={styles.tabMenuOption}
+                onPress={() => {
+                  setActiveTab(option.key);
+                  setShowTabMenu(false);
+                }}
+                activeOpacity={0.7}>
+                <Text
+                  style={[
+                    styles.tabMenuOptionText,
+                    activeTab === option.key && styles.tabMenuOptionTextActive,
+                  ]}>
+                  {option.label} {option.count > 0 && `(${option.count})`}
+                </Text>
+                {activeTab === option.key && (
+                  <Icon name="check" size={18} color={colors.accentLight} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Scrollable Song List */}
       <FlatList
@@ -238,24 +349,6 @@ export const HomeScreen: React.FC = () => {
     </View>
   );
 };
-
-interface TabButtonProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  count: number;
-}
-
-const TabButton: React.FC<TabButtonProps> = ({ label, active, onPress, count }) => (
-  <TouchableOpacity
-    style={[styles.tab, active && styles.tabActive]}
-    onPress={onPress}
-    activeOpacity={0.7}>
-    <Text style={[styles.tabText, active && styles.tabTextActive]}>
-      {label} {count > 0 && `(${count})`}
-    </Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -304,39 +397,79 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.wider,
     marginBottom: spacing.xs,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
   title: {
     fontSize: typography.sizes.xxxl,
     fontWeight: typography.weights.black,
     letterSpacing: typography.letterSpacing.tight,
     color: colors.text.primary,
-    marginBottom: spacing.md,
   },
-  tabsContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  tabs: {
+  titleRowActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
-  tab: {
+  rescanButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.borderGlow,
+  },
+  tabMenuButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tabActive: {
     backgroundColor: colors.accentDim,
+    borderWidth: 1,
     borderColor: colors.borderGlow,
   },
-  tabText: {
+  tabMenuButtonText: {
     fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.medium,
-    color: colors.text.secondary,
+    fontWeight: typography.weights.semibold,
+    color: colors.accentLight,
   },
-  tabTextActive: {
+  tabMenuBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 150,
+    paddingRight: spacing.lg,
+  },
+  tabMenu: {
+    minWidth: 180,
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.xs,
+    ...elevation.floating,
+  },
+  tabMenuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  tabMenuOptionText: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.medium,
+    color: colors.text.primary,
+  },
+  tabMenuOptionTextActive: {
     color: colors.accentLight,
     fontWeight: typography.weights.semibold,
   },

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git update-index *)",
+      "Bash(cd \"c:/KABIR/gitKabir/suno\" && find src -iname \"App.tsx\" -o -iname \"App.ts\"; cat src/../App.tsx 2>/dev/null | head -60)",
+      "Read(//c/KABIR/gitKabir/suno/**)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(cd \"c:/KABIR/gitKabir/suno\" && cat -A /dev/null; wc -l src/screens/LibraryScreen.tsx)",
+      "Read(//dev/**)",
+      "Bash(xargs grep -l \"getActiveTrackIndex\\\\|getQueue\")",
+      "Bash(git stash *)",
+      "Bash(node -e ' *)",
+      "Bash(cp tsconfig.json /tmp/tsconfig.json.bak)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat {}')",
+      "Bash(xargs grep -l \"useProgress\\\\|UpdateOptions\")"
+    ]
+  }
+}

@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useMusicStore, Playlist } from '../store/musicStore';
@@ -40,6 +41,13 @@ export const LibraryScreen: React.FC = () => {
   const [pendingSong, setPendingSong] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [showViewModeMenu, setShowViewModeMenu] = useState(false);
+
+  const viewModeLabels: Record<ViewMode, string> = {
+    albums: 'Albums',
+    artists: 'Artists',
+    playlists: 'Playlists',
+  };
 
   const albumsList = useMemo(() => {
     return Array.from(albums.entries()).map(([name, songs]) => ({
@@ -289,26 +297,53 @@ export const LibraryScreen: React.FC = () => {
       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Browse</Text>
-          <Text style={styles.title}>Library</Text>
-          <View style={styles.tabs}>
-            <TabButton
-              label="Albums"
-              active={viewMode === 'albums'}
-              onPress={() => setViewMode('albums')}
-            />
-            <TabButton
-              label="Artists"
-              active={viewMode === 'artists'}
-              onPress={() => setViewMode('artists')}
-            />
-            <TabButton
-              label="Playlists"
-              active={viewMode === 'playlists'}
-              onPress={() => setViewMode('playlists')}
-            />
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Library</Text>
+            <TouchableOpacity
+              style={styles.viewModeButton}
+              onPress={() => setShowViewModeMenu(true)}
+              activeOpacity={0.7}>
+              <Text style={styles.viewModeButtonText}>{viewModeLabels[viewMode]}</Text>
+              <Icon name="chevron-down" size={18} color={colors.secondaryAccent} />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      <Modal
+        visible={showViewModeMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowViewModeMenu(false)}>
+        <TouchableOpacity
+          style={styles.viewModeBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowViewModeMenu(false)}>
+          <View style={styles.viewModeMenu}>
+            {(['albums', 'artists', 'playlists'] as ViewMode[]).map((mode) => (
+              <TouchableOpacity
+                key={mode}
+                style={styles.viewModeOption}
+                onPress={() => {
+                  setViewMode(mode);
+                  setShowViewModeMenu(false);
+                }}
+                activeOpacity={0.7}>
+                <Text
+                  style={[
+                    styles.viewModeOptionText,
+                    viewMode === mode && styles.viewModeOptionTextActive,
+                  ]}>
+                  {viewModeLabels[mode]}
+                </Text>
+                {viewMode === mode && (
+                  <Icon name="check" size={18} color={colors.secondaryAccent} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Scrollable Content */}
       {renderContent()}
@@ -337,23 +372,6 @@ export const LibraryScreen: React.FC = () => {
     </View>
   );
 };
-
-interface TabButtonProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}
-
-const TabButton: React.FC<TabButtonProps> = ({ label, active, onPress }) => (
-  <TouchableOpacity
-    style={[styles.tab, active && styles.tabActive]}
-    onPress={onPress}
-    activeOpacity={0.7}>
-    <Text style={[styles.tabText, active && styles.tabTextActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -388,35 +406,63 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.wider,
     marginBottom: spacing.xs,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   title: {
     fontSize: typography.sizes.xxxl,
     fontWeight: typography.weights.black,
     letterSpacing: typography.letterSpacing.tight,
     color: colors.text.primary,
-    marginBottom: spacing.lg,
   },
-  tabs: {
+  viewModeButton: {
     flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  tab: {
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tabActive: {
     backgroundColor: colors.secondaryAccentDim,
+    borderWidth: 1,
     borderColor: colors.secondaryAccent,
   },
-  tabText: {
+  viewModeButtonText: {
     fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.medium,
-    color: colors.text.secondary,
+    fontWeight: typography.weights.semibold,
+    color: colors.secondaryAccent,
   },
-  tabTextActive: {
+  viewModeBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 130,
+    paddingRight: spacing.lg,
+  },
+  viewModeMenu: {
+    minWidth: 160,
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.xs,
+    ...elevation.floating,
+  },
+  viewModeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  viewModeOptionText: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.medium,
+    color: colors.text.primary,
+  },
+  viewModeOptionTextActive: {
     color: colors.secondaryAccent,
     fontWeight: typography.weights.semibold,
   },

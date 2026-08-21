@@ -1,3 +1,6 @@
+// Must be the first import in the app — react-native-gesture-handler sets up
+// its native event subscriptions on load.
+import 'react-native-gesture-handler';
 import { AppRegistry } from 'react-native';
 import TrackPlayer from 'react-native-track-player';
 import App from './App';

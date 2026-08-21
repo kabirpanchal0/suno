@@ -11,7 +11,24 @@ export const setupPlayer = async () => {
     await TrackPlayer.setupPlayer({
       maxCacheSize: 1024 * 10,
     });
+  } catch (error: any) {
+    // In dev, effects can run twice (Fast Refresh / Strict Mode remount)
+    // while the native player module keeps its state across that remount —
+    // TrackPlayer then throws "already been initialized" even though setup
+    // genuinely succeeded the first time. That's not a real failure, so
+    // don't treat it as one; anything else should still surface loudly.
+    const alreadyInitialized =
+      error?.code === 'player_already_initialized' ||
+      (typeof error?.message === 'string' &&
+        error.message.includes('already been initialized'));
 
+    if (!alreadyInitialized) {
+      console.error('Error setting up player:', error);
+      return;
+    }
+  }
+
+  try {
     await TrackPlayer.updateOptions({
       android: {
         appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
@@ -33,7 +50,7 @@ export const setupPlayer = async () => {
       progressUpdateEventInterval: 1,
     });
   } catch (error) {
-    console.error('Error setting up player:', error);
+    console.error('Error updating player options:', error);
   }
 };
 

@@ -1,8 +1,43 @@
 import RNFS from 'react-native-fs';
 import { Song } from '../store/musicStore';
 import { PermissionsAndroid, Platform } from 'react-native';
+// Import the built CommonJS module directly — the package's "browser" field
+// (which Metro/RN prefers) points at dist/jsmediatags.js, which doesn't exist
+// in the published package. build2/jsmediatags.js is the real, working build.
+import * as jsmediatags from 'jsmediatags/build2/jsmediatags';
+import { Buffer } from 'buffer';
 
 const MUSIC_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.flac', '.wav', '.ogg'];
+
+// Reads embedded ID3/MP4 tags (title/artist/album/artwork) from an audio file.
+// jsmediatags works purely in JS (no native rebuild needed) and reads directly
+// off the filesystem path via react-native-fs under the hood.
+const readEmbeddedTags = (filePath: string): Promise<Partial<Song>> => {
+  return new Promise((resolve) => {
+    jsmediatags.read(filePath, {
+      onSuccess: ({ tags }) => {
+        let artwork: string | undefined;
+        if (tags.picture) {
+          const { data, format } = tags.picture;
+          const base64 = Buffer.from(data).toString('base64');
+          artwork = `data:${format};base64,${base64}`;
+        }
+
+        resolve({
+          title: tags.title || undefined,
+          artist: tags.artist || undefined,
+          album: tags.album || undefined,
+          artwork,
+        });
+      },
+      onError: () => {
+        // No readable tags (e.g. unsupported format or no metadata) — that's fine,
+        // the filename-based fallback below still applies.
+        resolve({});
+      },
+    });
+  });
+};
 
 export const requestStoragePermission = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') {
@@ -65,13 +100,15 @@ const scanDirectory = async (
       } else if (item.isFile()) {
         const ext = item.name.substring(item.name.lastIndexOf('.')).toLowerCase();
         if (MUSIC_EXTENSIONS.includes(ext)) {
-          const metadata = extractMetadataFromPath(item.path);
+          const filenameMetadata = extractMetadataFromPath(item.path);
+          const embeddedTags = await readEmbeddedTags(item.path);
           const song: Song = {
             id: item.path,
             url: `file://${item.path}`,
-            title: metadata.title || item.name,
-            artist: metadata.artist || 'Unknown Artist',
-            album: 'Unknown Album',
+            title: embeddedTags.title || filenameMetadata.title || item.name,
+            artist: embeddedTags.artist || filenameMetadata.artist || 'Unknown Artist',
+            album: embeddedTags.album || 'Unknown Album',
+            artwork: embeddedTags.artwork,
             duration: 0,
           };
           songs.push(song);

@@ -88,6 +88,33 @@ export const typography = {
   },
 };
 
+// "Neon Void" palette — used only by the Now Playing screen, per
+// neon-void-design.md. Values are taken verbatim from that spec's tokens /
+// reference HTML (the doc states tokens + HTML are authoritative over prose).
+export const nowPlayingColors = {
+  canvas: '#993a25',
+  surfaceRecessed: '#7a2e1e',
+  surface: '#f87254',
+  surfaceElevated: '#f87a5e',
+
+  fg: '#ffffff',
+  fgMuted: '#bba5a0',
+
+  accent: '#150505', // --gesso-accent / --gesso-primary — used sparingly
+  accent2: '#e85638', // --gesso-accent-2 — the dominant on-screen action color
+  onAccent: '#ffffff',
+  onImage: '#ffffff',
+  scrim: 'rgba(10,3,2,0.62)',
+
+  // Soft translucent chip/pill backgrounds mixed from fg, matching the
+  // spec's color-mix(in srgb, var(--gesso-fg) N%, transparent) usage.
+  chipBg: 'rgba(255,255,255,0.06)',
+  roundBtnBg: 'rgba(153,58,37,0.88)', // color-mix(canvas 88%, transparent)
+  miniPlayerBg: 'rgba(153,58,37,0.90)', // color-mix(canvas 90%, transparent)
+
+  divider: 'rgba(255,255,255,0.04)',
+};
+
 // Shared elevation/glow presets for tactile depth
 export const elevation = {
   card: {

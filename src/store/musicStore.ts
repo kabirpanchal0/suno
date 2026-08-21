@@ -26,7 +26,11 @@ interface MusicState {
   albums: Map<string, Song[]>;
   artists: Map<string, Song[]>;
   playlists: Playlist[];
-  
+  /** True once the persisted library has been read from storage (or found
+   * empty) at least once. Lets screens distinguish "haven't checked storage
+   * yet" from "checked storage, there's genuinely nothing there". */
+  hasHydrated: boolean;
+
   // Playback
   currentSong: Song | null;
   queue: Song[];
@@ -45,6 +49,8 @@ interface MusicState {
   
   // Actions
   setSongs: (songs: Song[]) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
+  pruneMissingSongs: (validIds: Set<string>) => void;
   setCurrentSong: (song: Song | null) => void;
   setIsPlaying: (isPlaying: boolean) => void;
   setPosition: (position: number) => void;
@@ -70,6 +76,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   albums: new Map(),
   artists: new Map(),
   playlists: [],
+  hasHydrated: false,
   currentSong: null,
   queue: [],
   isPlaying: false,
@@ -84,6 +91,26 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setSongs: (songs) => {
     set({ songs });
     get().organizeMusicLibrary();
+  },
+
+  setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+
+  // Called after a rescan to drop library entries (and their queue/current
+  // song references) for songs that no longer exist on-device. Favorites,
+  // playlists, and recentlyPlayed intentionally keep the entries — they're
+  // historical records — but are filtered so their song lists never dangle.
+  pruneMissingSongs: (validIds) => {
+    const { favorites, recentlyPlayed, playlists, currentSong, queue } = get();
+    set({
+      favorites: favorites.filter((s) => validIds.has(s.id)),
+      recentlyPlayed: recentlyPlayed.filter((s) => validIds.has(s.id)),
+      playlists: playlists.map((pl) => ({
+        ...pl,
+        songs: pl.songs.filter((s) => validIds.has(s.id)),
+      })),
+      currentSong: currentSong && !validIds.has(currentSong.id) ? null : currentSong,
+      queue: queue.filter((s) => validIds.has(s.id)),
+    });
   },
 
   setCurrentSong: (song) => {

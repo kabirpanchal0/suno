@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Song } from '../store/musicStore';
@@ -15,6 +17,8 @@ interface SongItemProps {
   onPress: () => void;
   onLongPress?: () => void;
   isPlaying?: boolean;
+  /** Called when the row is swiped right past the reveal threshold. */
+  onSwipeToQueue?: (song: Song) => void;
 }
 
 const formatDuration = (seconds?: number): string => {
@@ -24,53 +28,123 @@ const formatDuration = (seconds?: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const SWIPE_REVEAL_WIDTH = 76;
+const SWIPE_TRIGGER_THRESHOLD = 56;
+
 export const SongItem: React.FC<SongItemProps> = ({
   song,
   onPress,
   onLongPress,
   isPlaying = false,
+  onSwipeToQueue,
 }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const resetSwipe = () => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 60,
+      friction: 10,
+    }).start();
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        !!onSwipeToQueue &&
+        gesture.dx > 8 &&
+        Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+      onPanResponderMove: (_evt, gesture) => {
+        if (gesture.dx > 0) {
+          translateX.setValue(Math.min(gesture.dx, SWIPE_REVEAL_WIDTH * 1.4));
+        }
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        if (onSwipeToQueue && gesture.dx > SWIPE_TRIGGER_THRESHOLD) {
+          onSwipeToQueue(song);
+        }
+        resetSwipe();
+      },
+      onPanResponderTerminate: resetSwipe,
+    })
+  ).current;
+
   return (
-    <TouchableOpacity
-      style={[styles.container, isPlaying && styles.containerActive]}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      activeOpacity={0.7}>
-      {/* Artwork */}
-      <View style={styles.artwork}>
-        {song.artwork ? (
-          <Image source={{ uri: song.artwork }} style={styles.artworkImage} />
-        ) : (
-          <View style={styles.artworkPlaceholder}>
-            <Icon name="music-note" size={20} color={colors.tertiary} />
+    <View style={styles.rowWrapper}>
+      {!!onSwipeToQueue && (
+        <View style={styles.swipeBackdrop} pointerEvents="none">
+          <Icon name="playlist-plus" size={22} color={colors.accentLight} />
+          <Text style={styles.swipeBackdropText}>Queue</Text>
+        </View>
+      )}
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...(onSwipeToQueue ? panResponder.panHandlers : {})}>
+        <TouchableOpacity
+          style={[styles.container, isPlaying && styles.containerActive]}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          activeOpacity={0.7}>
+          {/* Artwork */}
+          <View style={styles.artwork}>
+            {song.artwork ? (
+              <Image source={{ uri: song.artwork }} style={styles.artworkImage} />
+            ) : (
+              <View style={styles.artworkPlaceholder}>
+                <Icon name="music-note" size={20} color={colors.tertiary} />
+              </View>
+            )}
+            {isPlaying && (
+              <View style={styles.playingIndicator}>
+                <Icon name="equalizer" size={14} color={colors.text.inverse} />
+              </View>
+            )}
           </View>
-        )}
-        {isPlaying && (
-          <View style={styles.playingIndicator}>
-            <Icon name="equalizer" size={14} color={colors.text.inverse} />
+
+          {/* Song info */}
+          <View style={styles.info}>
+            <Text
+              style={[styles.title, isPlaying && styles.titleActive]}
+              numberOfLines={1}>
+              {song.title}
+            </Text>
+            <Text style={styles.artist} numberOfLines={1}>
+              {song.artist}
+            </Text>
           </View>
-        )}
-      </View>
 
-      {/* Song info */}
-      <View style={styles.info}>
-        <Text
-          style={[styles.title, isPlaying && styles.titleActive]}
-          numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {song.artist}
-        </Text>
-      </View>
-
-      {/* Duration */}
-      <Text style={styles.duration}>{formatDuration(song.duration)}</Text>
-    </TouchableOpacity>
+          {/* Duration */}
+          <Text style={styles.duration}>{formatDuration(song.duration)}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  rowWrapper: {
+    position: 'relative',
+  },
+  swipeBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingLeft: spacing.lg,
+    backgroundColor: colors.accentDim,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.sm,
+  },
+  swipeBackdropText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    color: colors.accentLight,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -78,13 +152,10 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.sm,
     marginBottom: 2,
     borderRadius: borderRadius.md,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    backgroundColor: colors.background,
   },
   containerActive: {
     backgroundColor: colors.accentDim,
-    borderColor: colors.borderGlow,
   },
   artwork: {
     width: 52,
