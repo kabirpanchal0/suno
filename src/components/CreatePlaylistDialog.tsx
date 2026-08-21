@@ -45,7 +45,7 @@ export const CreatePlaylistDialog: React.FC<CreatePlaylistDialogProps> = ({
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={handleCancel}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="light-content" />
       <View style={styles.container}>
         {/* Gradient Background Layers */}
         <View style={styles.gradientLayer1} />
@@ -186,9 +186,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.xxl,
     paddingBottom: spacing.lg,
-    marginTop: 20
   },
   closeButton: {
     padding: spacing.xs,

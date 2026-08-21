@@ -113,7 +113,7 @@ export const SongContextMenu: React.FC<SongContextMenuProps> = ({
 
               {!showPlaylistSelection ? (
                 /* Main Menu */
-                <ScrollView style={styles.menuScroll}>
+                <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuScrollContent}>
                   <MenuItem
                     iconName="skip-next"
                     label="Play Next"
@@ -147,7 +147,7 @@ export const SongContextMenu: React.FC<SongContextMenuProps> = ({
                     <Text style={styles.backButtonText}>Back</Text>
                   </TouchableOpacity>
 
-                  <ScrollView style={styles.menuScroll}>
+                  <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuScrollContent}>
                     <MenuItem
                       iconName="playlist-plus"
                       label="Create New Playlist"
@@ -250,6 +250,9 @@ const styles = StyleSheet.create({
   },
   menuScroll: {
     maxHeight: height * 0.5,
+  },
+  menuScrollContent: {
+    paddingBottom: spacing.xl,
   },
   menuItem: {
     flexDirection: 'row',

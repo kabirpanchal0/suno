@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,10 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useMusicStore, Song, Playlist } from '../store/musicStore';
 import { SearchBar } from '../components/SearchBar';
 import { SongContextMenu } from '../components/SongContextMenu';
+import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
 import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
-import { playQueue, addToQueue as addTrackToQueue } from '../services/MusicService';
+import { playQueue } from '../services/MusicService';
+import { useSongActions, useIsSongFavorite } from '../hooks/useSongActions';
 
 interface PlaylistDetailScreenProps {
   playlist: Playlist;
@@ -24,25 +26,29 @@ export const PlaylistDetailScreen: React.FC<PlaylistDetailScreenProps> = ({
   playlist,
   onBack,
 }) => {
+  const playlists = useMusicStore((s) => s.playlists);
+  const setCurrentSong = useMusicStore((s) => s.setCurrentSong);
+  const setIsPlaying = useMusicStore((s) => s.setIsPlaying);
+  const setQueue = useMusicStore((s) => s.setQueue);
+  const removeFromPlaylist = useMusicStore((s) => s.removeFromPlaylist);
+  const deletePlaylist = useMusicStore((s) => s.deletePlaylist);
+
   const {
-    playlists,
-    favorites,
-    setCurrentSong,
-    setIsPlaying,
-    setQueue,
-    playNext,
-    addToQueue,
-    toggleFavorite,
-    createPlaylist,
-    addToPlaylist,
-    removeFromPlaylist,
-    deletePlaylist,
-  } = useMusicStore();
+    contextMenuSong,
+    openContextMenu,
+    closeContextMenu,
+    showCreatePlaylist,
+    handlePlayNext,
+    handleAddToQueue,
+    handleAddToPlaylist,
+    handleToggleFavorite,
+    handleCreatePlaylist,
+    handlePlaylistCreated,
+    closeCreatePlaylistDialog,
+  } = useSongActions();
+  const isSongFavorite = useIsSongFavorite();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [contextMenuSong, setContextMenuSong] = useState<Song | null>(null);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [pendingSong, setPendingSong] = useState<Song | null>(null);
 
   // Get the current playlist data (it might have been updated)
   const currentPlaylist = playlists.find((p) => p.id === playlist.id) || playlist;
@@ -61,27 +67,31 @@ export const PlaylistDetailScreen: React.FC<PlaylistDetailScreenProps> = ({
     );
   }, [currentPlaylist.songs, searchQuery]);
 
-  const handleSongPress = async (song: Song, index: number) => {
-    setCurrentSong(song);
-    setQueue(filteredSongs.slice(index + 1));
-    setIsPlaying(true);
-    await playQueue(filteredSongs.slice(index));
-  };
-
-  const handleSongLongPress = (song: Song) => {
-    setContextMenuSong(song);
-  };
-
-  const handlePlayAll = async () => {
-    if (filteredSongs.length > 0) {
-      setCurrentSong(filteredSongs[0]);
-      setQueue(filteredSongs.slice(1));
+  const handleSongPress = useCallback(
+    async (song: Song, index: number) => {
+      setCurrentSong(song);
+      setQueue(filteredSongs.slice(index + 1));
       setIsPlaying(true);
-      await playQueue(filteredSongs);
-    }
-  };
+      await playQueue(filteredSongs.slice(index));
+    },
+    [filteredSongs, setCurrentSong, setQueue, setIsPlaying]
+  );
 
-  const handleDeletePlaylist = () => {
+  // Always plays the whole playlist, regardless of an active search filter —
+  // previously this used `filteredSongs`, so "Play All" while a search term
+  // was still typed silently played only the matching subset instead of the
+  // full playlist its label promised.
+  const handlePlayAll = useCallback(async () => {
+    const allSongs = currentPlaylist.songs || [];
+    if (allSongs.length > 0) {
+      setCurrentSong(allSongs[0]);
+      setQueue(allSongs.slice(1));
+      setIsPlaying(true);
+      await playQueue(allSongs);
+    }
+  }, [currentPlaylist.songs, setCurrentSong, setQueue, setIsPlaying]);
+
+  const handleDeletePlaylist = useCallback(() => {
     Alert.alert(
       'Delete Playlist',
       `Are you sure you want to delete "${currentPlaylist.name}"? This action cannot be undone.`,
@@ -97,13 +107,11 @@ export const PlaylistDetailScreen: React.FC<PlaylistDetailScreenProps> = ({
         },
       ]
     );
-  };
+  }, [currentPlaylist.id, currentPlaylist.name, deletePlaylist, onBack]);
 
-  const handleRemoveSong = (song: Song) => {
-    Alert.alert(
-      'Remove Song',
-      `Remove "${song.title}" from this playlist?`,
-      [
+  const handleRemoveSong = useCallback(
+    (song: Song) => {
+      Alert.alert('Remove Song', `Remove "${song.title}" from this playlist?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
@@ -112,77 +120,22 @@ export const PlaylistDetailScreen: React.FC<PlaylistDetailScreenProps> = ({
             removeFromPlaylist(currentPlaylist.id, song.id);
           },
         },
-      ]
-    );
-  };
+      ]);
+    },
+    [currentPlaylist.id, removeFromPlaylist]
+  );
 
-  const handleCloseContextMenu = () => {
-    setContextMenuSong(null);
-  };
-
-  const handlePlayNext = (song: Song) => {
-    playNext(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToQueue = (song: Song) => {
-    addToQueue(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToPlaylist = (song: Song, playlistId: string) => {
-    addToPlaylist(playlistId, song);
-  };
-
-  const handleToggleFavorite = (song: Song) => {
-    toggleFavorite(song);
-  };
-
-  const handleCreatePlaylist = (song: Song) => {
-    setPendingSong(song);
-    setShowCreatePlaylist(true);
-  };
-
-  const isSongFavorite = (song: Song): boolean => {
-    return favorites.some((s) => s.id === song.id);
-  };
-
-  const renderSong = ({ item, index }: { item: Song; index: number }) => (
-    <TouchableOpacity
-      style={styles.songItem}
-      onPress={() => handleSongPress(item, index)}
-      onLongPress={() => handleSongLongPress(item)}
-      activeOpacity={0.7}>
-      <View style={styles.songArtwork}>
-        {item.artwork ? (
-          <Image source={{ uri: item.artwork }} style={styles.songImage} />
-        ) : (
-          <View style={styles.songPlaceholder}>
-            <Icon name="music-note" size={24} color={colors.tertiary} />
-          </View>
-        )}
-      </View>
-      <View style={styles.songInfo}>
-        <Text style={styles.songTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={styles.songArtist} numberOfLines={1}>
-          {item.artist}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={styles.removeButton}
-        onPress={() => handleRemoveSong(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Icon name="close" size={20} color={colors.text.tertiary} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.moreButton}
-        onPress={() => handleSongLongPress(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Icon name="dots-vertical" size={24} color={colors.text.tertiary} />
-      </TouchableOpacity>
-    </TouchableOpacity>
+  const renderSong = useCallback(
+    ({ item, index }: { item: Song; index: number }) => (
+      <PlaylistSongRow
+        song={item}
+        index={index}
+        onPress={handleSongPress}
+        onLongPress={openContextMenu}
+        onRemove={handleRemoveSong}
+      />
+    ),
+    [handleSongPress, openContextMenu, handleRemoveSong]
   );
 
   return (
@@ -260,17 +213,88 @@ export const PlaylistDetailScreen: React.FC<PlaylistDetailScreenProps> = ({
         visible={!!contextMenuSong}
         song={contextMenuSong}
         playlists={playlists}
-        onClose={handleCloseContextMenu}
+        onClose={closeContextMenu}
         onPlayNext={handlePlayNext}
         onAddToQueue={handleAddToQueue}
         onAddToPlaylist={handleAddToPlaylist}
         onToggleFavorite={handleToggleFavorite}
         onCreatePlaylist={handleCreatePlaylist}
-        isFavorite={contextMenuSong ? isSongFavorite(contextMenuSong) : false}
+        isFavorite={isSongFavorite(contextMenuSong)}
+      />
+
+      {/* Previously missing entirely: the context menu's "Create New
+          Playlist" option called handleCreatePlaylist (which opens this
+          dialog's visible state) but nothing here ever rendered the dialog
+          itself, so tapping it silently did nothing. */}
+      <CreatePlaylistDialog
+        visible={showCreatePlaylist}
+        onClose={closeCreatePlaylistDialog}
+        onCreate={handlePlaylistCreated}
       />
     </View>
   );
 };
+
+interface PlaylistSongRowProps {
+  song: Song;
+  index: number;
+  onPress: (song: Song, index: number) => void;
+  onLongPress: (song: Song) => void;
+  onRemove: (song: Song) => void;
+}
+
+// Memoized for the same reason as SongItem/QueueRow: this list can be long,
+// and without this every row would re-render whenever the screen re-renders
+// for any reason (e.g. a search keystroke), not just when its own data changes.
+const PlaylistSongRow: React.FC<PlaylistSongRowProps> = React.memo(function PlaylistSongRowImpl({
+  song,
+  index,
+  onPress,
+  onLongPress,
+  onRemove,
+}) {
+  const handlePress = useCallback(() => onPress(song, index), [onPress, song, index]);
+  const handleLongPress = useCallback(() => onLongPress(song), [onLongPress, song]);
+  const handleRemove = useCallback(() => onRemove(song), [onRemove, song]);
+
+  return (
+    <TouchableOpacity
+      style={styles.songItem}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      activeOpacity={0.7}>
+      <View style={styles.songArtwork}>
+        {song.artwork ? (
+          <Image source={{ uri: song.artwork }} style={imageStyles.songImage} />
+        ) : (
+          <View style={styles.songPlaceholder}>
+            <Icon name="music-note" size={24} color={colors.tertiary} />
+          </View>
+        )}
+      </View>
+      <View style={styles.songInfo}>
+        <Text style={styles.songTitle} numberOfLines={1}>
+          {song.title}
+        </Text>
+        <Text style={styles.songArtist} numberOfLines={1}>
+          {song.artist}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={styles.removeButton}
+        onPress={handleRemove}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Icon name="close" size={20} color={colors.text.tertiary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.moreButton}
+        onPress={handleLongPress}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Icon name="dots-vertical" size={24} color={colors.text.tertiary} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -281,7 +305,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
     gap: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -333,6 +358,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xxl,
     flexGrow: 1,
   },
   songItem: {
@@ -351,11 +377,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     borderRadius: borderRadius.sm,
     overflow: 'hidden',
-  },
-  songImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: borderRadius.sm,
   },
   songPlaceholder: {
     width: '100%',
@@ -403,5 +424,17 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+});
+
+// Split out for the same reason as LibraryScreen's imageStyles: keeps this
+// Image-typed style precisely typed instead of widened to
+// ViewStyle | TextStyle | ImageStyle by sharing a StyleSheet.create call
+// with View/Text styles.
+const imageStyles = StyleSheet.create({
+  songImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: borderRadius.sm,
   },
 });

@@ -16,7 +16,6 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { MiniPlayer } from './src/components/MiniPlayer';
 import { colors, spacing, typography } from './src/theme/colors';
-import TrackPlayer from 'react-native-track-player';
 
 type Tab = 'home' | 'library';
 
@@ -45,7 +44,7 @@ function App(): React.JSX.Element {
     return (
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaView style={styles.loadingContainer}>
-          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+          <StatusBar barStyle="light-content" />
           <Icon name="music" size={80} color={colors.accent} />
         </SafeAreaView>
       </GestureHandlerRootView>
@@ -55,10 +54,24 @@ function App(): React.JSX.Element {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <StatusBar barStyle="light-content" />
 
+        {/* Both screens stay mounted and are shown/hidden via `display`
+            rather than being conditionally rendered. A conditional render
+            here would unmount+remount HomeScreen on every tab switch,
+            re-running its full library-hydration effect (re-reading
+            AsyncStorage, rebuilding the albums/artists maps) and losing
+            scroll position — every single time the user taps between tabs.
+            `display: 'none'` keeps the subtree alive with zero extra cost:
+            hidden screens do no work since nothing in them is re-rendering,
+            and layout/paint skips them entirely. */}
         <View style={styles.content}>
-          {activeTab === 'home' ? <HomeScreen /> : <LibraryScreen />}
+          <View style={activeTab === 'home' ? styles.tabContentVisible : styles.tabContentHidden}>
+            <HomeScreen />
+          </View>
+          <View style={activeTab === 'library' ? styles.tabContentVisible : styles.tabContentHidden}>
+            <LibraryScreen />
+          </View>
         </View>
 
         <MiniPlayer onPress={handleMiniPlayerPress} />
@@ -132,12 +145,19 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  tabContentVisible: {
+    flex: 1,
+  },
+  tabContentHidden: {
+    display: 'none',
+  },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
   tabButton: {
     flex: 1,

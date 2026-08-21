@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,51 +9,65 @@ import {
   Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useMusicStore } from '../store/musicStore';
+import { useMusicStore, Song } from '../store/musicStore';
 import { SearchBar } from '../components/SearchBar';
 import { SongItem } from '../components/SongItem';
 import { SongContextMenu } from '../components/SongContextMenu';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
 import { colors, spacing, typography, borderRadius, elevation } from '../theme/colors';
 import { scanMusicLibrary, searchSongs } from '../services/FileService';
-import { playTrack, addToQueue as addTrackToQueue } from '../services/MusicService';
+import { playTrack } from '../services/MusicService';
 import { loadLibrary, saveLibrary, mergeScannedSongs } from '../services/LibraryStorageService';
+import { useSongActions, useIsSongFavorite } from '../hooks/useSongActions';
 
 export const HomeScreen: React.FC = () => {
+  // Selector-scoped subscriptions: each field is its own subscription, so a
+  // change to e.g. `position` (which ticks ~once/second during playback,
+  // see MusicService's progressUpdateEventInterval) no longer re-renders
+  // this whole screen — only the fields actually read here do.
+  const songs = useMusicStore((s) => s.songs);
+  const setSongs = useMusicStore((s) => s.setSongs);
+  const setHasHydrated = useMusicStore((s) => s.setHasHydrated);
+  const pruneMissingSongs = useMusicStore((s) => s.pruneMissingSongs);
+  const searchQuery = useMusicStore((s) => s.searchQuery);
+  const setSearchQuery = useMusicStore((s) => s.setSearchQuery);
+  const currentSongId = useMusicStore((s) => s.currentSong?.id);
+  const recentlyPlayed = useMusicStore((s) => s.recentlyPlayed);
+  const favorites = useMusicStore((s) => s.favorites);
+  const playlists = useMusicStore((s) => s.playlists);
+  const setCurrentSong = useMusicStore((s) => s.setCurrentSong);
+  const setIsPlaying = useMusicStore((s) => s.setIsPlaying);
+  const setQueue = useMusicStore((s) => s.setQueue);
+
   const {
-    songs,
-    setSongs,
-    setHasHydrated,
-    pruneMissingSongs,
-    searchQuery,
-    setSearchQuery,
-    currentSong,
-    recentlyPlayed,
-    favorites,
-    playlists,
-    setCurrentSong,
-    setIsPlaying,
-    setQueue,
-    playNext,
-    addToQueue,
-    toggleFavorite,
-    createPlaylist,
-    addToPlaylist,
-  } = useMusicStore();
+    contextMenuSong,
+    openContextMenu,
+    closeContextMenu,
+    showCreatePlaylist,
+    handlePlayNext,
+    handleAddToQueue,
+    handleAddToPlaylist,
+    handleToggleFavorite,
+    handleCreatePlaylist,
+    handlePlaylistCreated,
+    closeCreatePlaylistDialog,
+  } = useSongActions();
+  const isSongFavorite = useIsSongFavorite();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isRescanning, setIsRescanning] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'favorites'>('all');
-  const [contextMenuSong, setContextMenuSong] = useState<any>(null);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [pendingSong, setPendingSong] = useState<any>(null);
   const [showTabMenu, setShowTabMenu] = useState(false);
 
-  const tabOptions: { key: 'all' | 'recent' | 'favorites'; label: string; count: number }[] = [
-    { key: 'all', label: 'All Songs', count: songs.length },
-    { key: 'recent', label: 'Recent', count: recentlyPlayed.length },
-    { key: 'favorites', label: 'Favorites', count: favorites.length },
-  ];
+  const tabOptions = useMemo(
+    () =>
+      [
+        { key: 'all' as const, label: 'All Songs', count: songs.length },
+        { key: 'recent' as const, label: 'Recent', count: recentlyPlayed.length },
+        { key: 'favorites' as const, label: 'Favorites', count: favorites.length },
+      ],
+    [songs.length, recentlyPlayed.length, favorites.length]
+  );
   const activeTabOption = tabOptions.find((t) => t.key === activeTab)!;
 
   // Runs once per mount. Loads whatever was persisted from a previous scan
@@ -100,24 +114,27 @@ export const HomeScreen: React.FC = () => {
   // on-device are dropped from the library (their references elsewhere —
   // favorites/playlists/recently-played — are pruned too), and songs that
   // still exist keep their identity, so nothing gets duplicated.
-  const performScan = async ({ persist }: { persist: boolean }) => {
-    const scannedSongs = await scanMusicLibrary();
-    const currentSongs = useMusicStore.getState().songs;
-    const merged = mergeScannedSongs(currentSongs, scannedSongs);
+  const performScan = useCallback(
+    async ({ persist }: { persist: boolean }) => {
+      const scannedSongs = await scanMusicLibrary();
+      const currentSongs = useMusicStore.getState().songs;
+      const merged = mergeScannedSongs(currentSongs, scannedSongs);
 
-    setSongs(merged);
-    pruneMissingSongs(new Set(merged.map((s) => s.id)));
+      setSongs(merged);
+      pruneMissingSongs(new Set(merged.map((s) => s.id)));
 
-    if (persist) {
-      await saveLibrary(merged);
-    }
-    return merged;
-  };
+      if (persist) {
+        await saveLibrary(merged);
+      }
+      return merged;
+    },
+    [setSongs, pruneMissingSongs]
+  );
 
   // Explicit user-triggered rescan (pull-to-refresh / "Refresh Library"
   // button / empty-state retry). This is the ONLY path that hits the device
   // filesystem after first launch.
-  const handleRescanLibrary = async () => {
+  const handleRescanLibrary = useCallback(async () => {
     setIsRescanning(true);
     try {
       await performScan({ persist: true });
@@ -126,11 +143,11 @@ export const HomeScreen: React.FC = () => {
     } finally {
       setIsRescanning(false);
     }
-  };
+  }, [performScan]);
 
   const filteredSongs = useMemo(() => {
     let baseSongs = songs;
-    
+
     if (activeTab === 'recent') {
       baseSongs = recentlyPlayed;
     } else if (activeTab === 'favorites') {
@@ -140,99 +157,65 @@ export const HomeScreen: React.FC = () => {
     return searchQuery ? searchSongs(baseSongs, searchQuery) : baseSongs;
   }, [songs, recentlyPlayed, favorites, searchQuery, activeTab]);
 
-  const handleSongPress = async (song: any, index: number) => {
-    const queue = filteredSongs.slice(index + 1);
-    setCurrentSong(song);
-    setIsPlaying(true);
-    // Without this, the store's `queue` stayed empty until the next track
-    // change resynced it (see playbackService's PlaybackActiveTrackChanged
-    // handler) — so Now Playing's "Up Next" list had nothing to show and
-    // looked broken/unscrollable right after playing a song from Home.
-    setQueue(queue);
-    await playTrack(song, queue);
-  };
-
-  const handleSongLongPress = (song: any) => {
-    setContextMenuSong(song);
-  };
-
-  const handleCloseContextMenu = () => {
-    setContextMenuSong(null);
-  };
-
-  const handlePlayNext = (song: any) => {
-    playNext(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToQueue = (song: any) => {
-    addToQueue(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToPlaylist = (song: any, playlistId: string) => {
-    addToPlaylist(playlistId, song);
-  };
-
-  const handleToggleFavorite = (song: any) => {
-    toggleFavorite(song);
-  };
-
-  const handleCreatePlaylist = (song: any) => {
-    setPendingSong(song);
-    setShowCreatePlaylist(true);
-  };
-
-  const handlePlaylistCreated = (name: string) => {
-    const playlist = createPlaylist(name);
-    if (pendingSong) {
-      addToPlaylist(playlist.id, pendingSong);
-      setPendingSong(null);
-    }
-  };
-
-  const isSongFavorite = (song: any): boolean => {
-    return favorites.some((s) => s.id === song.id);
-  };
-
-  const renderSong = ({ item, index }: { item: any; index: number }) => (
-    <SongItem
-      song={item}
-      onPress={() => handleSongPress(item, index)}
-      onLongPress={() => handleSongLongPress(item)}
-      isPlaying={currentSong?.id === item.id}
-      onSwipeToQueue={handleAddToQueue}
-    />
+  const handleSongPress = useCallback(
+    async (song: Song, index: number) => {
+      const queue = filteredSongs.slice(index + 1);
+      setCurrentSong(song);
+      setIsPlaying(true);
+      // Without this, the store's `queue` stayed empty until the next track
+      // change resynced it (see playbackService's PlaybackActiveTrackChanged
+      // handler) — so Now Playing's "Up Next" list had nothing to show and
+      // looked broken/unscrollable right after playing a song from Home.
+      setQueue(queue);
+      await playTrack(song, queue);
+    },
+    [filteredSongs, setCurrentSong, setIsPlaying, setQueue]
   );
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      {isLoading || isRescanning ? (
-        <>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.emptyText}>Scanning music library...</Text>
-        </>
-      ) : (
-        <>
-          <Text style={styles.emptyIcon}>♪</Text>
-          <Text style={styles.emptyText}>
-            {searchQuery
-              ? 'No songs found'
-              : activeTab === 'recent'
-              ? 'No recently played songs'
-              : activeTab === 'favorites'
-              ? 'No favorite songs yet'
-              : 'No music found'}
-          </Text>
-          {!searchQuery && activeTab === 'all' && (
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRescanLibrary}>
-              <Text style={styles.refreshButtonText}>Refresh Library</Text>
-            </TouchableOpacity>
-          )}
-        </>
-      )}
-    </View>
+
+  const renderSong = useCallback(
+    ({ item, index }: { item: Song; index: number }) => (
+      <SongItem
+        song={item}
+        index={index}
+        onPress={handleSongPress}
+        onLongPress={openContextMenu}
+        isPlaying={currentSongId === item.id}
+        onSwipeToQueue={handleAddToQueue}
+      />
+    ),
+    [handleSongPress, openContextMenu, currentSongId, handleAddToQueue]
+  );
+
+  const renderEmpty = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        {isLoading || isRescanning ? (
+          <>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text style={styles.emptyText}>Scanning music library...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.emptyIcon}>♪</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery
+                ? 'No songs found'
+                : activeTab === 'recent'
+                ? 'No recently played songs'
+                : activeTab === 'favorites'
+                ? 'No favorite songs yet'
+                : 'No music found'}
+            </Text>
+            {!searchQuery && activeTab === 'all' && (
+              <TouchableOpacity style={styles.refreshButton} onPress={handleRescanLibrary}>
+                <Text style={styles.refreshButtonText}>Refresh Library</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+    ),
+    [isLoading, isRescanning, searchQuery, activeTab, handleRescanLibrary]
   );
 
   return (
@@ -329,21 +312,18 @@ export const HomeScreen: React.FC = () => {
         visible={!!contextMenuSong}
         song={contextMenuSong}
         playlists={playlists}
-        onClose={handleCloseContextMenu}
+        onClose={closeContextMenu}
         onPlayNext={handlePlayNext}
         onAddToQueue={handleAddToQueue}
         onAddToPlaylist={handleAddToPlaylist}
         onToggleFavorite={handleToggleFavorite}
         onCreatePlaylist={handleCreatePlaylist}
-        isFavorite={contextMenuSong ? isSongFavorite(contextMenuSong) : false}
+        isFavorite={isSongFavorite(contextMenuSong)}
       />
 
       <CreatePlaylistDialog
         visible={showCreatePlaylist}
-        onClose={() => {
-          setShowCreatePlaylist(false);
-          setPendingSong(null);
-        }}
+        onClose={closeCreatePlaylistDialog}
         onCreate={handlePlaylistCreated}
       />
     </View>
@@ -377,6 +357,7 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
   },
   headerContainer: {
     backgroundColor: 'transparent',
@@ -385,9 +366,8 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    marginTop: 20
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   eyebrow: {
     fontSize: typography.sizes.xs,

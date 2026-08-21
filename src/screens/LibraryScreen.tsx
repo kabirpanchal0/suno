@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,38 +7,36 @@ import {
   TouchableOpacity,
   Image,
   Modal,
+  BackHandler,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useMusicStore, Playlist } from '../store/musicStore';
-import { SongContextMenu } from '../components/SongContextMenu';
+import { useMusicStore, Playlist, Song } from '../store/musicStore';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
 import { PlaylistDetailScreen } from './PlaylistDetailScreen';
 import { SearchBar } from '../components/SearchBar';
 import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
-import { playQueue, addToQueue as addTrackToQueue } from '../services/MusicService';
+import { playQueue } from '../services/MusicService';
+import { useSongActions } from '../hooks/useSongActions';
 
 type ViewMode = 'albums' | 'artists' | 'playlists';
 
 export const LibraryScreen: React.FC = () => {
-  const {
-    albums,
-    artists,
-    playlists,
-    favorites,
-    setCurrentSong,
-    setIsPlaying,
-    setQueue,
-    playNext,
-    addToQueue,
-    toggleFavorite,
-    createPlaylist,
-    addToPlaylist,
-  } = useMusicStore();
+  const albums = useMusicStore((s) => s.albums);
+  const artists = useMusicStore((s) => s.artists);
+  const playlists = useMusicStore((s) => s.playlists);
+  const setCurrentSong = useMusicStore((s) => s.setCurrentSong);
+  const setIsPlaying = useMusicStore((s) => s.setIsPlaying);
+  const setQueue = useMusicStore((s) => s.setQueue);
+
+  // LibraryScreen's grid items are albums/artists/playlists, not individual
+  // songs, so there's no long-press-a-song surface here — only the
+  // "New Playlist" creation flow from useSongActions is actually reachable
+  // from this screen. (Individual song actions live in PlaylistDetailScreen,
+  // which does use the full hook.)
+  const { showCreatePlaylist, handleCreatePlaylistButton, handlePlaylistCreated, closeCreatePlaylistDialog } =
+    useSongActions();
 
   const [viewMode, setViewMode] = useState<ViewMode>('albums');
-  const [contextMenuSong, setContextMenuSong] = useState<any>(null);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [pendingSong, setPendingSong] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [showViewModeMenu, setShowViewModeMenu] = useState(false);
@@ -87,113 +85,94 @@ export const LibraryScreen: React.FC = () => {
     });
   }, [playlists, searchQuery]);
 
-  const handleAlbumPress = async (albumSongs: any[]) => {
-    if (albumSongs.length > 0) {
-      setCurrentSong(albumSongs[0]);
-      setQueue(albumSongs.slice(1));
-      setIsPlaying(true);
-      await playQueue(albumSongs);
-    }
-  };
-
-  const handlePlaylistPress = (playlist: Playlist) => {
-    setSelectedPlaylist(playlist);
-  };
-
-  const handleBackFromPlaylist = () => {
-    setSelectedPlaylist(null);
-  };
-
-  const handleCloseContextMenu = () => {
-    setContextMenuSong(null);
-  };
-
-  const handlePlayNext = (song: any) => {
-    playNext(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToQueue = (song: any) => {
-    addToQueue(song);
-    addTrackToQueue(song);
-  };
-
-  const handleAddToPlaylist = (song: any, playlistId: string) => {
-    addToPlaylist(playlistId, song);
-  };
-
-  const handleToggleFavorite = (song: any) => {
-    toggleFavorite(song);
-  };
-
-  const handleCreatePlaylist = (song: any) => {
-    setPendingSong(song);
-    setShowCreatePlaylist(true);
-  };
-
-  const handlePlaylistCreated = (name: string) => {
-    const playlist = createPlaylist(name);
-    if (pendingSong) {
-      addToPlaylist(playlist.id, pendingSong);
-      setPendingSong(null);
-    }
-  };
-
-  const handleCreatePlaylistButton = () => {
-    setPendingSong(null);
-    setShowCreatePlaylist(true);
-  };
-
-  const isSongFavorite = (song: any): boolean => {
-    return favorites.some((s) => s.id === song.id);
-  };
-
-  const renderAlbum = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.gridItem}
-      onPress={() => handleAlbumPress(item.songs)}
-      activeOpacity={0.7}>
-      <View style={styles.gridItemArtwork}>
-        {item.artwork ? (
-          <Image source={{ uri: item.artwork }} style={styles.gridItemImage} />
-        ) : (
-          <View style={styles.gridItemPlaceholder}>
-            <Text style={styles.gridItemPlaceholderText}>♪</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.gridItemTitle} numberOfLines={2}>
-        {item.name}
-      </Text>
-      <Text style={styles.gridItemSubtitle}>
-        {item.songs.length} song{item.songs.length !== 1 ? 's' : ''}
-      </Text>
-    </TouchableOpacity>
+  const handleAlbumPress = useCallback(
+    async (albumSongs: Song[]) => {
+      if (albumSongs.length > 0) {
+        setCurrentSong(albumSongs[0]);
+        setQueue(albumSongs.slice(1));
+        setIsPlaying(true);
+        await playQueue(albumSongs);
+      }
+    },
+    [setCurrentSong, setQueue, setIsPlaying]
   );
 
-  const renderPlaylist = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.listItem}
-      onPress={() => handlePlaylistPress(item)}
-      activeOpacity={0.7}>
-      <View style={styles.listItemArtwork}>
-        {item.songs?.[0]?.artwork ? (
-          <Image source={{ uri: item.songs[0].artwork }} style={styles.listItemImage} />
-        ) : (
-          <View style={styles.listItemPlaceholder}>
-            <Text style={styles.listItemPlaceholderText}>♪</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.listItemInfo}>
-        <Text style={styles.listItemTitle} numberOfLines={1}>
+  const handlePlaylistPress = useCallback((playlist: Playlist) => {
+    setSelectedPlaylist(playlist);
+  }, []);
+
+  const handleBackFromPlaylist = useCallback(() => {
+    setSelectedPlaylist(null);
+  }, []);
+
+  // There's no navigation stack in this app — viewing a playlist's detail
+  // is just a local state swap, not a pushed route. Without this, Android's
+  // hardware/gesture back button falls through to the OS default (typically
+  // backgrounding/exiting the app) instead of returning to the playlist
+  // list, since nothing else intercepts it.
+  useEffect(() => {
+    if (!selectedPlaylist) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedPlaylist(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selectedPlaylist]);
+
+  const renderAlbum = useCallback(
+    ({ item }: { item: any }) => (
+      <TouchableOpacity
+        style={styles.gridItem}
+        onPress={() => handleAlbumPress(item.songs)}
+        activeOpacity={0.7}>
+        <View style={styles.gridItemArtwork}>
+          {item.artwork ? (
+            <Image source={{ uri: item.artwork }} style={imageStyles.gridItemImage} />
+          ) : (
+            <View style={styles.gridItemPlaceholder}>
+              <Text style={styles.gridItemPlaceholderText}>♪</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.gridItemTitle} numberOfLines={2}>
           {item.name}
         </Text>
-        <Text style={styles.listItemSubtitle}>
-          {item.songs?.length || 0} song{item.songs?.length !== 1 ? 's' : ''}
+        <Text style={styles.gridItemSubtitle}>
+          {item.songs.length} song{item.songs.length !== 1 ? 's' : ''}
         </Text>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    ),
+    [handleAlbumPress]
+  );
+
+  const renderPlaylist = useCallback(
+    ({ item }: { item: any }) => (
+      <TouchableOpacity
+        style={styles.listItem}
+        onPress={() => handlePlaylistPress(item)}
+        activeOpacity={0.7}>
+        <View style={styles.listItemArtwork}>
+          {item.songs?.[0]?.artwork ? (
+            <Image source={{ uri: item.songs[0].artwork }} style={imageStyles.listItemImage} />
+          ) : (
+            <View style={styles.listItemPlaceholder}>
+              <Text style={styles.listItemPlaceholderText}>♪</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.listItemInfo}>
+          <Text style={styles.listItemTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.listItemSubtitle}>
+            {item.songs?.length || 0} song{item.songs?.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    ),
+    [handlePlaylistPress]
   );
 
   const renderContent = () => {
@@ -348,25 +327,9 @@ export const LibraryScreen: React.FC = () => {
       {/* Scrollable Content */}
       {renderContent()}
 
-      <SongContextMenu
-        visible={!!contextMenuSong}
-        song={contextMenuSong}
-        playlists={playlists}
-        onClose={handleCloseContextMenu}
-        onPlayNext={handlePlayNext}
-        onAddToQueue={handleAddToQueue}
-        onAddToPlaylist={handleAddToPlaylist}
-        onToggleFavorite={handleToggleFavorite}
-        onCreatePlaylist={handleCreatePlaylist}
-        isFavorite={contextMenuSong ? isSongFavorite(contextMenuSong) : false}
-      />
-
       <CreatePlaylistDialog
         visible={showCreatePlaylist}
-        onClose={() => {
-          setShowCreatePlaylist(false);
-          setPendingSong(null);
-        }}
+        onClose={closeCreatePlaylistDialog}
         onCreate={handlePlaylistCreated}
       />
     </View>
@@ -395,8 +358,8 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: spacing.lg,
-    paddingTop: spacing.lg,
-    marginTop: 20
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   eyebrow: {
     fontSize: typography.sizes.xs,
@@ -468,6 +431,7 @@ const styles = StyleSheet.create({
   },
   gridContent: {
     padding: spacing.md,
+    paddingBottom: spacing.xxl,
     flexGrow: 1,
   },
   gridRow: {
@@ -483,11 +447,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     borderRadius: borderRadius.md,
     ...elevation.card,
-  },
-  gridItemImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: borderRadius.md,
   },
   gridItemPlaceholder: {
     width: '100%',
@@ -515,6 +474,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: spacing.md,
+    paddingBottom: spacing.xxl,
     flexGrow: 1,
   },
   listItem: {
@@ -533,11 +493,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     borderRadius: borderRadius.sm,
     overflow: 'hidden',
-  },
-  listItemImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: borderRadius.sm,
   },
   listItemPlaceholder: {
     width: '100%',
@@ -610,5 +565,26 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.md,
     fontWeight: typography.weights.semibold,
     color: colors.text.inverse,
+  },
+});
+
+// Split into their own StyleSheet.create call: RN's StyleSheet.create infers
+// a single shared type across every key in one call, so mixing Image styles
+// into the same object as View/Text styles above widened everything to
+// ViewStyle | TextStyle | ImageStyle — which broke both the <Image> style
+// props (ImageStyle disallows ViewStyle's `overflow: 'scroll'`) and, as
+// collateral damage, `gap` on unrelated View styles in that same object.
+// Keeping Image-only styles in a separate call keeps both sides precisely
+// typed.
+const imageStyles = StyleSheet.create({
+  gridItemImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: borderRadius.md,
+  },
+  listItemImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: borderRadius.sm,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import { colors, spacing, borderRadius, typography, elevation } from '../theme/c
 
 interface SongItemProps {
   song: Song;
-  onPress: () => void;
-  onLongPress?: () => void;
+  index: number;
+  onPress: (song: Song, index: number) => void;
+  onLongPress?: (song: Song) => void;
   isPlaying?: boolean;
   /** Called when the row is swiped right past the reveal threshold. */
   onSwipeToQueue?: (song: Song) => void;
@@ -31,14 +32,26 @@ const formatDuration = (seconds?: number): string => {
 const SWIPE_REVEAL_WIDTH = 76;
 const SWIPE_TRIGGER_THRESHOLD = 56;
 
-export const SongItem: React.FC<SongItemProps> = ({
+// Memoized: rendered once per row in potentially long song FlatLists (Home,
+// Playlist Detail). Without this, every parent re-render (e.g. a progress
+// tick reaching this far, or search text changing) would re-render every
+// visible row even though most rows' props haven't changed.
+export const SongItem: React.FC<SongItemProps> = React.memo(function SongItemImpl({
   song,
+  index,
   onPress,
   onLongPress,
   isPlaying = false,
   onSwipeToQueue,
-}) => {
+}) {
   const translateX = useRef(new Animated.Value(0)).current;
+
+  // Bind song/index here, inside the memoized component, rather than the
+  // parent creating a fresh closure per row on every render — that's what
+  // lets React.memo's prop-equality check above actually skip re-renders
+  // for rows whose own data hasn't changed.
+  const handlePress = useCallback(() => onPress(song, index), [onPress, song, index]);
+  const handleLongPress = useCallback(() => onLongPress?.(song), [onLongPress, song]);
 
   const resetSwipe = () => {
     Animated.spring(translateX, {
@@ -83,8 +96,8 @@ export const SongItem: React.FC<SongItemProps> = ({
         {...(onSwipeToQueue ? panResponder.panHandlers : {})}>
         <TouchableOpacity
           style={[styles.container, isPlaying && styles.containerActive]}
-          onPress={onPress}
-          onLongPress={onLongPress}
+          onPress={handlePress}
+          onLongPress={handleLongPress}
           activeOpacity={0.7}>
           {/* Artwork */}
           <View style={styles.artwork}>
@@ -120,7 +133,7 @@ export const SongItem: React.FC<SongItemProps> = ({
       </Animated.View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   rowWrapper: {

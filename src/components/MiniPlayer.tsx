@@ -17,7 +17,16 @@ interface MiniPlayerProps {
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress }) => {
-  const { currentSong, isPlaying, position, duration, setIsPlaying } = useMusicStore();
+  // Individually selected: this component legitimately needs position/duration
+  // (it renders the progress bar) and so re-rendering on every progress tick
+  // is correct here — but selecting each field separately still means it
+  // won't re-render on unrelated store changes (searchQuery, playlists, ...)
+  // the way a broad `useMusicStore()` destructure would.
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const position = useMusicStore((s) => s.position);
+  const duration = useMusicStore((s) => s.duration);
+  const setIsPlaying = useMusicStore((s) => s.setIsPlaying);
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   if (!currentSong) {

@@ -12,7 +12,13 @@
       "Bash(node -e ' *)",
       "Bash(cp tsconfig.json /tmp/tsconfig.json.bak)",
       "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat {}')",
-      "Bash(xargs grep -l \"useProgress\\\\|UpdateOptions\")"
+      "Bash(xargs grep -l \"useProgress\\\\|UpdateOptions\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"TSC EXIT: $?\")",
+      "Bash(export ANDROID_HOME=\"/c/Users/TVC/AppData/Local/Android/Sdk\")",
+      "Bash(export ANDROID_SDK_ROOT=\"$ANDROID_HOME\")",
+      "Bash(/c/Users/TVC/AppData/Local/Android/Sdk/platform-tools/adb devices *)",
+      "Bash(netstat -ano)"
     ]
   }
 }

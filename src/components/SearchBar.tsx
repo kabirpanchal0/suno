@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  View,
   TextInput,
   StyleSheet,
   TouchableOpacity,
@@ -22,11 +21,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = 'Search songs, albums, artists...',
   autoFocus = false,
 }) => {
-  const [isFocused, setIsFocused] = useState(false);
   const focusAnim = React.useRef(new Animated.Value(0)).current;
 
   const handleFocus = () => {
-    setIsFocused(true);
     Animated.timing(focusAnim, {
       toValue: 1,
       duration: 200,
@@ -35,7 +32,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   const handleBlur = () => {
-    setIsFocused(false);
     Animated.timing(focusAnim, {
       toValue: 0,
       duration: 200,
